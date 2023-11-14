@@ -1,9 +1,11 @@
 from typing import List
+import os
 import dearpygui.dearpygui as dpg
 from dearpygui_ext.themes import create_theme_imgui_light
 
-
+from config import *
 dpg.create_context()
+
 
 def _log(sender, app_data, user_data):
     print(f"sender: {sender}, \t app_data: {app_data}, \t user_data: {user_data}")
@@ -55,7 +57,7 @@ def table():
             for i in range(rows):
                 with dpg.table_row():
                     for j in range(columns):
-                        dpg.add_input_text(width=-1,height=40, multiline=True)
+                        dpg.add_input_text(width=-1, height=40, multiline=True)
 
 
 def ui():
@@ -71,7 +73,6 @@ def primary_window():
 
 
 def main():
-
     with dpg.font_registry():
         default_font = dpg.add_font('fonts/OpenSans-Regular.ttf', 24)
     with dpg.handler_registry():
