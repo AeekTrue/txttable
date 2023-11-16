@@ -1,189 +1,196 @@
-import os.path
-from typing import List
+import os
 import dearpygui.dearpygui as dpg
-from dearpygui_ext.themes import create_theme_imgui_light
-from itertools import repeat
-from config import *
+from enum import StrEnum, auto
 import json
 
-dpg.create_context()
-print(USER_DATA_DIR)
-print(USER_CONFIG_PATH)
 
-def init_user_data_dir():
-    if not os.path.exists(USER_DATA_DIR):
-        os.makedirs(USER_DATA_DIR)
-    if not os.path.exists(USER_CONFIG_PATH):
-        with open(USER_CONFIG_PATH, 'w') as f:
-            json.dump(dict(), f)
+#CONFIG_PATH = os.path.join(os.path.expanduser('~'), '.txttable')
+CONFIG_PATH = './conf.json'
+
+class Element(StrEnum):
+    PRIMARY_WINDOW = auto()
+    TABLE = auto()
+    MENU_BAR = auto()
+    MENU_FILE = auto()
+    TARGET_FILE_PATH_INPUT = auto()
+    STATUS_BAR = auto()
+
+class Table:
+    def __init__(self, rows=10, columns=16):
+        self.rows = rows
+        self.columns = columns
+        self.column_width = 100
+        self._data = []
+        self._table_wrapper_tag = f'{Element.TABLE}#wrapper'
+
+    def _make_table(self):
+        print('make table')
+        with dpg.table(tag=Element.TABLE, parent=self._table_wrapper_tag,
+            borders_outerH=True, borders_outerV=True,
+            borders_innerV=True, borders_innerH=True,
+            header_row=False, width=self.column_width * self.columns,
+            no_pad_innerX=True, no_pad_outerX=True,
+            resizable=True, policy=dpg.mvTable_SizingStretchSame):
+            for i in range(self.columns):
+                dpg.add_table_column()
+            
+            data_length = len(self._data)
+            for i in range(self.rows):
+                with dpg.table_row():
+                    for j in range(self.columns):
+                        index = i*self.columns + j
+                        cell_value = self._data[index] if index < data_length else ''
+                        #print(cell_value, sep=' ')
+                        dpg.add_input_text(
+                            tag=self.get_cell_tag(i, j), default_value=cell_value,
+                            width=-1, height=40, multiline=True)
+
+    def make(self):
+        dpg.add_child_window(label='Table window', tag=self._table_wrapper_tag,
+            horizontal_scrollbar=True)
+        self._make_table() 
+
+    def _remake(self):
+        '''delete table and create again'''
+        dpg.delete_item(Element.TABLE)
+        self._make_table()
+    
+    def _resize(self, rows, columns):
+        self.rows = rows
+        self.columns = columns
+    
+    def set_data(self, data: list[str]):
+        print(data)
+        self._data = data.copy()
+        n = len(data)
+        new_rows = max(self.rows, (n + self.columns - 1) // self.columns)
+        self._resize(rows=new_rows, columns=self.columns)
+        self._remake()
+         
+    def get_data(self):
+        data = []
+        for row in range(self.rows):
+            for col in range(self.columns):
+                tag = self.get_cell_tag(row, col)
+                value = dpg.get_value(tag)
+                data.append(value)
+        return data
+        
+    def get_cell_tag(self, i, j):
+        return f'{Element.TABLE}#{i}_{j}'
 
 
-def load_config() -> dict:
-    if os.path.exists(USER_CONFIG_PATH):
-        with open(USER_CONFIG_PATH, 'r') as f:
+class Config:
+    def __init__(self, path=CONFIG_PATH):
+        self._path = path
+        if not os.path.exists(path):
+            with open(path, 'w') as f:
+                json.dump(dict(), f)
+
+        self.config = self.load_config_file()
+    
+    def set_target_file_path(self, file_path):
+        self.config['target_file_path'] = file_path
+        self.save_config_file()
+   
+    def get_target_file_path(self):
+        return self.config.get('target_file_path', '')
+
+    def load_config_file(self):
+        with open(self._path) as f:
             return json.load(f)
-    else:
-        return dict()
+
+    def save_config_file(self):
+        with open(self._path, 'w') as f:
+            json.dump(self.config, f)
+
+class StatusBar:
+    def __init__(self):
+        pass 
+
+    def make(self):
+        dpg.add_text('Welcome!', tag=Element.STATUS_BAR)
+
+    def set_status(self, text, bad=False, good=False):
+        dpg.set_value(Element.STATUS_BAR, text)
+        if bad:
+            color = (255, 0, 0)
+        elif good:
+            color = (0, 255, 0)
+        else:
+            color = (255, 255, 255)
+
+        dpg.configure_item(Element.STATUS_BAR, color=color)
 
 
-def save_config(config: dict):
-    with open(USER_CONFIG_PATH, 'w') as f:
-        json.dump(config, f)
+def menu():
+    with dpg.menu_bar(tag=Element.MENU_BAR):
+        with dpg.menu(label='File', tag=Element.MENU_FILE):
+            dpg.add_menu_item(label='test')
 
 
 class App:
-    def __init__(self):
-        init_user_data_dir()
-        self.config = load_config()
-        if 'target_file_path' in self.config:
-            self.target_file_path = self.config['target_file_path']
-            dpg.set_value('path input', self.target_file_path)
-            load_txt()
+    def __init__(self, config):
+        self.config = config
+        self.table = Table()
+        self.status_bar = StatusBar()
+
+    def make_gui(self):
+        with dpg.window(tag=Element.PRIMARY_WINDOW):
+            #menu()
+            self.status_bar.make()
+            with dpg.group(horizontal=True):
+                dpg.add_text('Target file path:')
+                dpg.add_input_text(tag=Element.TARGET_FILE_PATH_INPUT, default_value=self.config.get_target_file_path(), width=250)
+                dpg.add_button(label='Load', callback=self.on_load_file)
+                dpg.add_button(label='Save', callback=self.on_save_file)
+            self.table.make()
+
+    def run_gui(self):
+        self.on_load_file()
+        dpg.set_primary_window(Element.PRIMARY_WINDOW, True)
+        dpg.start_dearpygui()
+
+    def on_load_file(self):
+        target_file_path_value = self.get_target_file_path()
+        self.load_file(target_file_path_value)
+
+    def on_save_file(self):
+        target_file_path_value = self.get_target_file_path()
+        self.save_file(target_file_path_value)
+
+    def load_file(self, file_path):
+        file_path = os.path.expanduser(file_path)
+        if os.path.exists(file_path):
+            self.config.set_target_file_path(file_path)
+            with open(file_path) as f:
+                data = f.read().split('\n\n')
+                self.table.set_data(data)
+            self.status_bar.set_status(f'File {file_path} loaded')
+        elif file_path == '':
+            self.status_bar.set_status('Enter file name and press \'Load\'')
         else:
-            self.target_file_path = None
+            self.status_bar.set_status(f'File {file_path} not found!', bad=True)
+    
+    def save_file(self, file_path):
+        data = self.table.get_data()
+        with open(file_path, 'w') as f:
+            f.write('\n\n'.join(data))
 
-    def set_target_file_path(self, file_path):
-        self.target_file_path = file_path
-        self.config['target_file_path'] = file_path
-        save_config(self.config)
-
-
-TABLE_ID = -1
-TABLE_W = 16
-TABLE_H = 10
-app = App()
+    def get_target_file_path(self):
+        return dpg.get_value(Element.TARGET_FILE_PATH_INPUT)
 
 
-def set_target_file_path():
-    pass
-
-
-def _log(sender, app_data, user_data):
-    print(f"sender: {sender}, \t app_data: {app_data}, \t user_data: {user_data}")
-
-
-def get_filename() -> str:
-    filename = os.path.expanduser(dpg.get_value('path input'))
-    app.set_target_file_path(filename)
-    return filename
-
-
-def load_txt():
-    filename = get_filename()
-    text = ''
-    with open(filename, 'r') as f:
-        text = f.read()
-
-    splitted_text = text.split('\n\n')
-    matrix = []
-    for row in range((len(splitted_text) + TABLE_W - 1) // TABLE_W):
-        matrix.append(splitted_text[row * TABLE_W: (row + 1) * TABLE_W])
-    set_table_content(matrix)
-
-
-def save_txt():
-    filename = get_filename()
-    text = get_table_txt()
-    with open(filename, 'w') as f:
-        f.write(text)
-
-
-def set_table_content(content: List[str]):
-    for i in range(TABLE_H):
-        if i >= len(content):
-            break
-        for j in range(TABLE_W):
-            if j >= len(content[i]):
-                break
-            tag = f'##{i}_{j}'
-            # print(tag)
-            dpg.set_value(tag, content[i][j])
-
-
-def get_table_content():
-    content = []
-    for i in range(TABLE_H):
-        content.append([])
-        for j in range(TABLE_W):
-            tag = f'##{i}_{j}'
-            # print(tag)
-            content[i].append(dpg.get_value(tag))
-    print(content)
-
-
-def get_table_txt():
-    text = []
-    for row in range(TABLE_H):
-        for col in range(TABLE_W):
-            tag = f'##{row}_{col}'
-            value = dpg.get_value(tag)
-            text.append(value)
-    return '\n\n'.join(text)
-
-
-def on_save_txt():
-    save_txt()
-
-
-def on_load_txt():
-    load_txt()
-
-
-def menu_bar():
-    with dpg.menu_bar(label="Menu bar"):
-        with dpg.menu(label="File"):
-            pass
-        with dpg.menu(label="About"):
-            pass
-
-
-def table():
-    global TABLE_ID
-    column_width = 100
-    with dpg.child_window(label='Table window', horizontal_scrollbar=True):
-        with dpg.table(borders_outerH=True, borders_outerV=True,
-                       borders_innerV=True, borders_innerH=True,
-                       header_row=False, width=column_width * TABLE_W, no_pad_innerX=True,
-                       no_pad_outerX=True, resizable=True, policy=dpg.mvTable_SizingStretchSame) as tbl:
-            TABLE_ID = tbl
-            for i in range(TABLE_W):
-                dpg.add_table_column(label=str(i))
-
-            for i in range(TABLE_H):
-                with dpg.table_row():
-                    for j in range(TABLE_W):
-                        dpg.add_input_text(tag=f"##{i}_{j}", width=-1, height=40, multiline=True)
-
-
-def ui():
-    with dpg.window(label="", tag='pm'):
-        menu_bar()
-        dpg.add_button(label="Load from file", callback=on_load_txt)
-        dpg.add_input_text(tag='path input')
-        dpg.set_value('path input', '~/.txttable')
-        dpg.add_button(label="Save to file", callback=on_save_txt)
-        table()
-
-
-def primary_window():
-    ui()
-    dpg.set_primary_window('pm', True)
-
-
-def main():
+if __name__ == '__main__':
+    dpg.create_context()
     with dpg.font_registry():
         default_font = dpg.add_font('fonts/OpenSans-Regular.ttf', 24)
-    with dpg.handler_registry():
-        dpg.add_key_press_handler(dpg.mvKey_Escape, callback=lambda: print('lol'))
-
     dpg.bind_font(default_font)
-    # light_theme = create_theme_imgui_light()
-    # dpg.bind_theme(light_theme)
-
-    # dpg.show_item_registry()
-    dpg.create_viewport(title='TxT Table', width=1600, height=800)
+    config = Config()
+    app = App(config)
     dpg.setup_dearpygui()
+    dpg.create_viewport(title='TxT Table', width=1600, height=800)
     dpg.show_viewport()
-    primary_window()
-    dpg.start_dearpygui()
+    app.make_gui()
+    app.run_gui()
     dpg.destroy_context()
