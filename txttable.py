@@ -19,7 +19,8 @@ class Table:
     def __init__(self, rows=10, columns=16):
         self.rows = rows
         self.columns = columns
-        self.column_width = 100
+        self.column_width = 200
+        self.column_height = 54
         self._data = []
         self._table_wrapper_tag = f'{Element.TABLE}#wrapper'
 
@@ -28,9 +29,10 @@ class Table:
         with dpg.table(tag=Element.TABLE, parent=self._table_wrapper_tag,
             borders_outerH=True, borders_outerV=True,
             borders_innerV=True, borders_innerH=True,
-            header_row=False, width=self.column_width * self.columns,
             no_pad_innerX=True, no_pad_outerX=True,
-            resizable=True, policy=dpg.mvTable_SizingStretchSame):
+            resizable=True, policy=dpg.mvTable_SizingFixedFit,
+            header_row=False, scrollX=True):
+            
             for i in range(self.columns):
                 dpg.add_table_column()
             
@@ -41,9 +43,11 @@ class Table:
                         index = i*self.columns + j
                         cell_value = self._data[index] if index < data_length else ''
                         #print(cell_value, sep=' ')
-                        dpg.add_input_text(
-                            tag=self.get_cell_tag(i, j), default_value=cell_value,
-                            width=-1, height=40, multiline=True)
+                        #dpg.add_text('kek')
+                        with dpg.group(width=self.column_width) as g:
+                            dpg.add_input_text(
+                                tag=self.get_cell_tag(i, j), default_value=cell_value,
+                                width=self.column_width, height=self.column_height, multiline=True)
 
     def make(self):
         dpg.add_child_window(label='Table window', tag=self._table_wrapper_tag,
