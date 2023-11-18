@@ -2,10 +2,21 @@ import os
 import dearpygui.dearpygui as dpg
 from enum import StrEnum, auto
 import json
+import sys
 
+HOME_DIR = os.path.expanduser("~")
 
-#CONFIG_PATH = os.path.join(os.path.expanduser('~'), '.txttable')
-CONFIG_PATH = './conf.json'
+if getattr(sys, 'frozen', False):
+	APP_PATH = os.path.dirname(sys.executable)
+	if platform.system() == 'Linux':
+		APP_DATA = os.path.join("/usr", "share", NAME, "data")
+	else:
+		APP_DATA = os.path.join(APP_PATH, "data")
+else:
+	APP_PATH = os.path.dirname(__file__)
+	APP_DATA = os.path.join(APP_PATH, "data")
+
+CONFIG_PATH = os.path.join(HOME_DIR, 'conf.json' )
 
 class Element(StrEnum):
     PRIMARY_WINDOW = auto()
@@ -20,7 +31,7 @@ class Table:
         self.rows = rows
         self.columns = columns
         self.column_width = 200
-        self.column_height = 54
+        self.column_height = 81 
         self._data = []
         self._table_wrapper_tag = f'{Element.TABLE}#wrapper'
 
@@ -31,10 +42,10 @@ class Table:
             borders_innerV=True, borders_innerH=True,
             no_pad_innerX=True, no_pad_outerX=True,
             resizable=True, policy=dpg.mvTable_SizingFixedFit,
-            header_row=False, scrollX=True):
+            header_row=True, scrollX=True):
             
             for i in range(self.columns):
-                dpg.add_table_column()
+                dpg.add_table_column(label=' ' *100)
             
             data_length = len(self._data)
             for i in range(self.rows):
@@ -44,11 +55,10 @@ class Table:
                         cell_value = self._data[index] if index < data_length else ''
                         #print(cell_value, sep=' ')
                         #dpg.add_text('kek')
-                        with dpg.group(width=self.column_width) as g:
+                        with dpg.group(width=-1) as g:
                             dpg.add_input_text(
                                 tag=self.get_cell_tag(i, j), default_value=cell_value,
-                                width=self.column_width, height=self.column_height, multiline=True)
-
+                                width=-1, height=self.column_height, multiline=True)
     def make(self):
         dpg.add_child_window(label='Table window', tag=self._table_wrapper_tag,
             horizontal_scrollbar=True)
@@ -167,10 +177,15 @@ class App:
         file_path = os.path.expanduser(file_path)
         if os.path.exists(file_path):
             self.config.set_target_file_path(file_path)
-            with open(file_path) as f:
-                data = f.read().split('\n\n')
-                self.table.set_data(data)
-            self.status_bar.set_status(f'File {file_path} loaded')
+            try:
+                with open(file_path) as f:
+                    data = f.read().split('\n\n')
+                    self.table.set_data(data)
+            except PermissionError:
+                self.status_bar.set_status(f'Permisson denied!', bad=True)
+            else:
+                self.status_bar.set_status(f'File {file_path} loaded')
+
         elif file_path == '':
             self.status_bar.set_status('Enter file name and press \'Load\'')
         else:
@@ -188,8 +203,9 @@ class App:
 if __name__ == '__main__':
     dpg.create_context()
     with dpg.font_registry():
-        default_font = dpg.add_font('fonts/OpenSans-Regular.ttf', 24)
-    dpg.bind_font(default_font)
+        with dpg.font(os.path.join(APP_DATA, 'fonts', 'OpenSans-Regular.ttf'), 24) as default_font:
+            dpg.add_font_range_hint(dpg.mvFontRangeHint_Cyrillic)
+        dpg.bind_font(default_font)
     config = Config()
     app = App(config)
     dpg.setup_dearpygui()

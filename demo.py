@@ -4,7 +4,7 @@ import dearpygui.demo as demo
 
 dpg.create_context()
 with dpg.font_registry():
-    default_font = dpg.add_font('fonts/OpenSans-Regular.ttf', 24)
+    default_font = dpg.add_font('data/fonts/OpenSans-Regular.ttf', 24)
 dpg.bind_font(default_font)
 
 
